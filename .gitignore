@@ -1,0 +1,46 @@
+# Logs
+*.log
+
+# Databases
+*.db
+*.sqlite
+
+# Data files
+*.txt
+*.csv
+*.json
+
+# Virtual environments
+.venv/
+venv/
+
+# Build artifacts
+build/
+*.pyd
+*.c
+
+# Configuration files
+.env
+*.ini
+*.conf
+*.cfg
+
+# Test files and caches
+tests/
+__pycache__/
+*.pyc
+test_*/
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# IDE settings
+.vscode/
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# Aux directories
+outputs/
+logs/
