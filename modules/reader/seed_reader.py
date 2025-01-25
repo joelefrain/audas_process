@@ -1,248 +1,184 @@
 import os
 import sys
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # Add 'libs' path to sys.path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
 
-from obspy import read, UTCDateTime
-from datetime import datetime, timedelta
-from config.config_variables import CHANNEL_INFO
-from config.logger_config import get_logger
+from datetime import datetime
+from obspy import read, Stream
+from obspy.core.utcdatetime import UTCDateTime
+from libs.utils.config_variables import CHANNEL_INFO
+from libs.utils.logger_config import get_logger
 
-module = "historical_monitoring"
+module = "reader"
 logger = get_logger(module)
 
 
-def read_earthquakes(earthquake_df, sensor_info, base_path):
+def get_stream_path(
+    data_path: str,
+    year: int,
+    network: str,
+    station: str,
+    model: str,
+    component: str,
+    location: str,
+    day_number: str,
+) -> str:
     """
-    Reads earthquake data for each row in the DataFrame and returns a dictionary of streams.
+    Construct the file path for a given component.
 
     Parameters
     ----------
-    earthquake_df : pd.DataFrame
-        DataFrame containing earthquake data.
-    sensor_info : dict
-        Dictionary containing sensor information.
-    base_path : str
-        Base path to the data files.
-
-    Returns
-    -------
-    dict
-        Dictionary with date strings as keys and corresponding streams as values.
-    """
-    streams = {}
-    logger.info("Starting to read earthquake data")
-
-    for index, row in earthquake_df.iterrows():
-        date_str = row["date"]
-        dt = parse_date(date_str)
-        year = dt.year
-        day_number = dt.strftime("%j")
-        start_time = UTCDateTime(dt)
-        end_time = start_time + timedelta(seconds=row["duration"])
-
-        network, station, location = (
-            sensor_info["network"],
-            sensor_info["station"],
-            sensor_info["location"],
-        )
-        logger.info(
-            f"Parsing earthquake data for {date_str} - {network}.{station}.{location}"
-        )
-
-        st = read_stream_for_event(
-            sensor_info, base_path, year, day_number, start_time, end_time
-        )
-        if st is None:
-            logger.warning(f"No valid stream found for date: {date_str}")
-        else:
-            logger.info(f"Stream successfully read for date: {date_str}")
-
-        streams[date_str] = st
-
-    logger.info("Finished reading earthquake data")
-    return streams
-
-
-def parse_date(date_str):
-    """
-    Parses a date string into a datetime object.
-
-    Parameters
-    ----------
-    date_str : str
-        Date string in the format "%d/%m/%Y %H:%M:%S".
-
-    Returns
-    -------
-    datetime
-        Parsed datetime object.
-    """
-    logger.debug(f"Parsing date string: {date_str}")
-    return datetime.strptime(date_str, "%d/%m/%Y %H:%M:%S")
-
-
-def build_file_path(base_path, sensor_info, year, day_number, component):
-    """
-    Constructs the file path for a specific component of the sensor.
-
-    Parameters
-    ----------
-    base_path : str
-        Base path to the data files.
-    sensor_info : dict
-        Dictionary containing sensor information.
+    data_path : str
+        Base path to the data directory.
     year : int
         Year of the event.
-    day_number : str
-        Day number of the year.
+    network : str
+        Network code.
+    station : str
+        Station code.
+    model : str
+        Model code.
     component : str
-        Component of the sensor.
+        Component code.
+    location : str
+        Location code.
+    day_number : str
+        Day of the year in Julian format.
 
     Returns
     -------
     str
         Constructed file path.
     """
-    path = (
-        f"{base_path}/{year}/{sensor_info['network']}/{sensor_info['station']}/"
-        f"{sensor_info['model']}{component}.D/"
-        f"{sensor_info['network']}.{sensor_info['station']}.{sensor_info['location']}."
-        f"{sensor_info['model']}{component}.D.{year}.{day_number}"
+    return (
+        f"{data_path}/{year}/{network}/{station}/{model}{component}.D/"
+        f"{network}.{station}.{location}.{model}{component}.D.{year}.{day_number}"
     )
-    logger.debug(f"Constructed file path: {path}")
-    return path
 
 
-def read_stream_for_event(
-    sensor_info, base_path, year, day_number, start_time, end_time
-):
+def read_component(path: str, start_time: UTCDateTime, end_time: UTCDateTime) -> Stream:
     """
-    Reads and filters the stream data for a specific event based on time range.
-    Handles events that span multiple days.
+    Read a component from the given path within the specified time range.
 
     Parameters
     ----------
-    sensor_info : dict
-        Dictionary containing sensor information.
-    base_path : str
-        Base path to the data files.
-    year : int
-        Year of the event.
-    day_number : str
-        Day number of the year.
+    path : str
+        Path to the data file.
     start_time : UTCDateTime
-        Start time of the event.
+        Start time for reading the data.
     end_time : UTCDateTime
-        End time of the event.
+        End time for reading the data.
 
     Returns
     -------
     Stream
-        Stream object containing the filtered data.
+        Stream object containing the read data.
     """
-    st = None  # Initialize an empty Stream object
-    logger.debug(f"Reading stream for event: year={year}, day_number={day_number}")
-
-    # Iterate over components and read streams for the start day
-    for component in CHANNEL_INFO.keys():
-        st = read_and_append_stream(
-            base_path,
-            sensor_info,
-            year,
-            day_number,
-            component,
-            start_time,
-            end_time,
-            st,
-        )
-
-    # If the event spans multiple days, process the next day
-    if start_time.date != end_time.date:
-        next_day = start_time + timedelta(days=1)
-        next_year = next_day.year
-        next_day_number = next_day.strftime("%j")
-
-        for component in CHANNEL_INFO.keys():
-            st = read_and_append_stream(
-                base_path,
-                sensor_info,
-                next_year,
-                next_day_number,
-                component,
-                start_time,
-                end_time,
-                st,
-            )
-
-    return st
-
-
-def read_and_append_stream(
-    base_path, sensor_info, year, day_number, component, start_time, end_time, st
-):
-    """
-    Reads a stream for a specific component and appends valid traces to the main stream.
-
-    Parameters
-    ----------
-    base_path : str
-        Base path to the data files.
-    sensor_info : dict
-        Dictionary containing sensor information.
-    year : int
-        Year of the event.
-    day_number : str
-        Day number of the year.
-    component : str
-        Component of the sensor.
-    start_time : UTCDateTime
-        Start time of the event.
-    end_time : UTCDateTime
-        End time of the event.
-    st : Stream
-        Main Stream object to append traces to.
-
-    Returns
-    -------
-    Stream
-        Updated Stream object with appended traces.
-    """
-    path = build_file_path(base_path, sensor_info, year, day_number, component)
     if os.path.exists(path):
-        logger.debug(f"File exists: {path}")
         stream = read(path, starttime=start_time, endtime=end_time)
-        st = append_valid_traces(st, stream, start_time, end_time)
-    else:
-        logger.warning(f"File does not exist: {path}")
-    return st
+        for trace in stream:
+            if trace.stats.starttime <= end_time and trace.stats.endtime >= start_time:
+                logger.info(f"Read trace from {path}")
+                return trace
+    logger.warning(f"Path does not exist or no valid trace found: {path}")
+    return None
 
 
-def append_valid_traces(st, stream, start_time, end_time):
+def read_event(
+    row: dict, data_path: str, network: str, station: str, location: str, model: str
+) -> tuple:
     """
-    Appends valid traces from the stream to the main Stream object.
+    Process a single event and read its components.
 
     Parameters
     ----------
-    st : Stream
-        Main Stream object to append traces to.
-    stream : Stream
-        Stream object containing traces to be appended.
-    start_time : UTCDateTime
-        Start time of the event.
-    end_time : UTCDateTime
-        End time of the event.
+    row : dict
+        Dictionary containing event information.
+    data_path : str
+        Base path to the data directory.
+    network : str
+        Network code.
+    station : str
+        Station code.
+    location : str
+        Location code.
+    model : str
+        Model code.
 
     Returns
     -------
-    Stream
-        Updated Stream object with appended traces.
+    tuple
+        Tuple containing the date string and the Stream object.
     """
-    for trace in stream:
-        if trace.stats.starttime <= end_time and trace.stats.endtime >= start_time:
-            if st is None:
-                st = stream.__class__()  # Initialize the Stream if not already
+    date_str = row["date"]
+    dt = datetime.strptime(date_str, "%d/%m/%Y %H:%M:%S")
+    year = dt.year
+    day_number = dt.strftime("%j")
+    start_time = UTCDateTime(dt)
+    end_time = start_time + row["duration"]
+
+    st = Stream()  # Initialize an empty Stream object
+
+    for component in CHANNEL_INFO.keys():
+        path = get_stream_path(
+            data_path, year, network, station, model, component, location, day_number
+        )
+        trace = read_component(path, start_time, end_time)
+        if trace:
             st.append(trace)
-            logger.debug(f"Appended trace: {trace.id}")
-    return st
+
+    if len(st) > 0:
+        logger.info(f"Successfully read event for date: {date_str}")
+    else:
+        logger.warning(f"No valid streams found for event on date: {date_str}")
+
+    return date_str, st if len(st) > 0 else None
+
+
+def read_seeds(
+    earthquake_df, data_path: str, network: str, station: str, location: str, model: str
+) -> dict:
+    """
+    Read SEED data for multiple events.
+
+    Parameters
+    ----------
+    earthquake_df : DataFrame
+        DataFrame containing earthquake event information.
+    data_path : str
+        Base path to the data directory.
+    network : str
+        Network code.
+    station : str
+        Station code.
+    location : str
+        Location code.
+    model : str
+        Model code.
+
+    Returns
+    -------
+    dict
+        Dictionary containing date strings as keys and Stream objects as values.
+    """
+    streams = {}
+
+    def read_seed(row):
+        date_str, st = read_event(row, data_path, network, station, location, model)
+        return date_str, st
+
+    with ThreadPoolExecutor() as executor:
+        futures = [
+            executor.submit(read_seed, row) for index, row in earthquake_df.iterrows()
+        ]
+        for future in as_completed(futures):
+            date_str, st = future.result()
+            if st:
+                streams[date_str] = st
+                logger.info(f"Added stream for date: {date_str}")
+            else:
+                logger.warning(f"Stream for date {date_str} is empty or not found")
+
+    return streams

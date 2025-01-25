@@ -8,6 +8,7 @@ import importlib
 import numpy as np
 import pandas as pd
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor
 
 from . import site, propagation, motion, output
 from libs.utils.logger_config import get_logger
@@ -71,6 +72,19 @@ class SoilFactory:
 
     @staticmethod
     def _replace_nan_with_empty(row):
+        """
+        Replace NaN values with empty strings in the specified columns.
+
+        Parameters
+        ----------
+        row : dict
+            Dictionary containing soil property data.
+
+        Returns
+        -------
+        dict
+            Updated dictionary with NaN values replaced by empty strings.
+        """
         for col in ["soil_type", "deg_curves", "author_curves"]:
             if pd.isna(row.get(col)):
                 row[col] = ""
@@ -78,6 +92,19 @@ class SoilFactory:
 
     @staticmethod
     def _get_valid_columns(row):
+        """
+        Get columns with valid (non-empty) values.
+
+        Parameters
+        ----------
+        row : dict
+            Dictionary containing soil property data.
+
+        Returns
+        -------
+        list
+            List of columns with valid values.
+        """
         valid_columns = [
             col for col in ["soil_type", "deg_curves", "author_curves"] if row.get(col)
         ]
@@ -87,6 +114,24 @@ class SoilFactory:
 
     @staticmethod
     def _create_soil_instance(row):
+        """
+        Create an instance of the specified soil type.
+
+        Parameters
+        ----------
+        row : dict
+            Dictionary containing soil property data.
+
+        Returns
+        -------
+        BaseSoilType
+            Instance of the specified soil type.
+
+        Raises
+        ------
+        AttributeError
+            If the specified class is not found in the `site` module.
+        """
         try:
             soil_type = str(row["soil_type"])
             soil_module = importlib.import_module(".site", package=__package__)
@@ -107,6 +152,24 @@ class SoilFactory:
 
     @staticmethod
     def _create_soil_from_file(row):
+        """
+        Create a soil instance from a file.
+
+        Parameters
+        ----------
+        row : dict
+            Dictionary containing soil property data.
+
+        Returns
+        -------
+        SoilType
+            Instance of the soil type created from the file.
+
+        Raises
+        ------
+        ImportError
+            If the 'site' module cannot be imported.
+        """
         try:
             return site.SoilType.from_published(
                 unit_wt=row["unit_wt"], model="sample", fpath=row["deg_curves"]
@@ -116,6 +179,24 @@ class SoilFactory:
 
     @staticmethod
     def _create_soil_from_published(row):
+        """
+        Create a soil instance from published data.
+
+        Parameters
+        ----------
+        row : dict
+            Dictionary containing soil property data.
+
+        Returns
+        -------
+        SoilType
+            Instance of the soil type created from published data.
+
+        Raises
+        ------
+        ImportError
+            If the 'site' module cannot be imported.
+        """
         try:
             return site.SoilType.from_published(
                 unit_wt=row["unit_wt"], model=row["author_curves"]
@@ -231,7 +312,6 @@ class SeismicResponse:
         OutputCollection
             Collection of outputs including response spectra and acceleration time series.
         """
-        logger.info("Calculating response for profile and motion")
         calc = propagation.EquivalentLinearCalculator()
         calc(motion, profile, profile.location(type_motion, index=-1))
 
@@ -260,25 +340,28 @@ class SeismicResponse:
         For each combination of profile and motion, calculates and stores the seismic response.
         """
         logger.info("Processing scenarios")
-        for motion_id, motion_data in self.motion_dict.items():
+
+        def process_profile_motion(motion_id, motion_data, profile_id, profile_df):
             motion_df, type_motion, sample_interval = (
                 motion_data["motion"],
                 motion_data["type_motion"],
                 motion_data["sample_interval"],
             )
             motions = self.motion_factory.create_motions(motion_id, motion_df, sample_interval)
+            profile = self.build_profile(profile_df)
+            logger.info("Processing profile %s and motion %s", profile_id, motion_id)
+            self.result_dict[profile_id][motion_id] = self.store_outputs(motions, profile, type_motion)
 
-            for profile_id, profile_df in self.profile_dict.items():
-                profile = self.build_profile(profile_df)
+        with ThreadPoolExecutor() as executor:
+            futures = [
+                executor.submit(process_profile_motion, motion_id, motion_data, profile_id, profile_df)
+                for motion_id, motion_data in self.motion_dict.items()
+                for profile_id, profile_df in self.profile_dict.items()
+            ]
+            for future in futures:
+                future.result()
 
-                logger.info(
-                    "Processing profile %s and motion %s", profile_id, motion_id
-                )
-                self.result_dict[profile_id][motion_id] = self._store_outputs(
-                    motions, profile, type_motion
-                )
-
-    def _store_outputs(self, motions, profile, type_motion):
+    def store_outputs(self, motions, profile, type_motion):
         """
         Executes the seismic response calculation and stores the results for each motion component.
 
@@ -289,14 +372,13 @@ class SeismicResponse:
         profile : Profile
             Site profile used in the calculation.
         type_motion : str
-            Type of seismic motion ('surface' or 'bedrock').
+            Type of seismic motion ('outcrop' for surface or 'within' for bedrock).
 
         Returns
         -------
         dict
             Dictionary with output results for each motion component.
         """
-        logger.info("Storing outputs for profile and motions")
         component_results = {}
         for component, motion in motions.items():
             outputs = self.calculate_response(profile, motion, type_motion)

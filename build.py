@@ -1,0 +1,2 @@
+# 1. Function that reads DB and writes CSV files for each geotechincal column for geotechnical structure.
+# The path must be ./data/site_response/{company}/{project}/{geotechnical_structure}/{geotechnical_column}.csv

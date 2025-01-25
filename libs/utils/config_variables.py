@@ -15,6 +15,12 @@ MOTION_COMPONENTS = ["EW", "NS", "UD"]
 MOTION_COLORS = ["b", "g", "r"]
 METADATA_CODE = "MTD"
 
+CHANNEL_INFO = {
+    "E": {"color": "blue", "label": "EW", "order": 0},
+    "N": {"color": "green", "label": "NS", "order": 1},
+    "Z": {"color": "red", "label": "UD", "order": 2},
+}
+
 # Output types for site response analysis
 OUTPUT_TYPES_SITE_RESPONSE = {
     "AccelerationTSOutput": {"index": 0, "code": "ACC"},

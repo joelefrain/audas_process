@@ -172,8 +172,8 @@ def save_data_displacement_calculator(
     logger.info(f"Displacement data saved to {json_output_path}")
 
 
+@log_execution_time(module="get_displacement")
 def exec_get_displacement(
-    module: str,
     company: str,
     project: str,
     structure: str,
@@ -183,18 +183,53 @@ def exec_get_displacement(
     params_displacement_calc: dict,
     base_output: str,
     base_data: str,
-    motion_path: str,
 ) -> dict:
     """
-    Orchestrator function to execute the displacement calculation process.
+    Calculate the seismic displacement induced in a single geotechnical structure using data from multiple sensors for a single seismic event.
+
+    This function performs the following steps:
+    1. Reads motion and profile data for site response analysis.
+    2. Runs the site response analysis and saves the results.
+    3. Calculates the spectral acceleration at the degraded period.
+    4. Runs the displacement calculation and saves the results.
+
+    Parameters
+    ----------
+    company : str
+        The name of the company.
+    project : str
+        The name of the project.
+    structure : str
+        The name of the geotechnical structure.
+    event : str
+        The identifier of the seismic event.
+    sensors_to_use : list
+        List of sensors to use for the analysis.
+    method_displacement_calc : str
+        The method to use for displacement calculation.
+    params_displacement_calc : dict
+        Parameters for the displacement calculation method.
+    base_output : str
+        Base directory for output files.
+    base_data : str
+        Base directory for input data files.
+
+    Returns
+    -------
+    dict
+        A dictionary containing the displacement attributes, spectral acceleration at the degraded period, and the degraded structural period.
     """
 
     # Paths
-    motion_dir = f"{base_output}/{motion_path}/{company}/{project}/{event}"
+    motion_dir = f"{base_output}/motion_divider/{company}/{project}/{event}"
     profile_dir = f"{base_data}/{company}/{project}/{structure}"
     site_response_dir = make_dir(
-        base_dir=f"{base_output}/{module}",
+        base_dir=f"{base_output}/site_response",
         path_components=[company, project, structure, event],
+    )
+    displacement_calculator_dir = make_dir(
+        base_dir=f"{base_output}/displacement_calculator",
+        path_components=[company, project, event],
     )
 
     # 1. Seismic Response Analysis
@@ -229,7 +264,7 @@ def exec_get_displacement(
 
     save_data_displacement_calculator(
         displacement_attr=displacement_attr,
-        output_dir=site_response_dir,
+        output_dir=displacement_calculator_dir,
         structure=structure,
     )
 
@@ -237,9 +272,6 @@ def exec_get_displacement(
 
 
 if __name__ == "__main__":
-
-    # Main module
-    module = "site_response"
 
     # Main variables
     company = "Shahuindo_SAC"
@@ -265,7 +297,6 @@ if __name__ == "__main__":
     motion_path = "motion_divider"
 
     displacement_attr = exec_get_displacement(
-        module=module,
         company=company,
         project=project,
         structure=structure,
@@ -275,5 +306,4 @@ if __name__ == "__main__":
         params_displacement_calc=params_displacement_calc,
         base_output=base_output,
         base_data=base_data,
-        motion_path=motion_path,
     )
