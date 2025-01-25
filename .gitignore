@@ -30,7 +30,6 @@ tests/
 __pycache__/
 *.pyc
 test_*/
-data/
 
 # Jupyter Notebook checkpoints
 .ipynb_checkpoints/
@@ -45,3 +44,9 @@ Thumbs.db
 # Aux directories
 outputs/
 logs/
+config/
+
+# Data
+data
+data/processor
+data/site_response
