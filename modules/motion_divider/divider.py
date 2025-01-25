@@ -32,8 +32,8 @@ def save_motion_data(type_motion, sample_rate, signals, output_dir, filename):
 
 # Example usage
 if __name__ == "__main__":
-    type_motion = "outcrop"
-    sample_rate = 0.02
+    type_motion = "outcrop" # outcrop or within
+    sample_rate = 0.02 # viene de inventory. from obspy read(inventory.sample_rate)
     signals = np.array([
         [0.00000000000302, 0.00000000000134, -0.00000000000037],  # EW
         [0.02000000000000, -0.00000000006283, -0.00000000006211],  # NS

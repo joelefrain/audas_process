@@ -159,7 +159,7 @@ def make_dir(base_dir, path_components):
 
 class MotionReader:
 
-    def __init__(self, motion_dir):
+    def __init__(self, motion_dir, motions=None):
         """
         Initialize the MotionReader with the directory containing motion files.
 
@@ -167,8 +167,11 @@ class MotionReader:
         ----------
         motion_dir : str
             Directory path where motion files are stored.
+        filenames : list of str, optional
+            List of specific filenames to read. If None, read all files in the directory.
         """
         self.motion_dir = motion_dir
+        self.filenames = [f"{motion}.txt" for motion in motions] if motions else None
 
     def file_to_df(self, motion_path):
         """
@@ -249,7 +252,7 @@ class MotionReader:
 
     def read_motions(self):
         """
-        Read all motion files in the directory and convert them into a dictionary.
+        Read all motion files in the directory or specified files and convert them into a dictionary.
 
         Returns
         -------
@@ -257,7 +260,8 @@ class MotionReader:
             Dictionary containing motion data with their identifiers.
         """
         motion_dict = {}
-        for motion_file in os.listdir(self.motion_dir):
+        files_to_read = self.filenames if self.filenames else os.listdir(self.motion_dir)
+        for motion_file in files_to_read:
             if motion_file.endswith(".txt"):
                 motion_path = os.path.join(self.motion_dir, motion_file)
                 type_motion, sample_interval, motion_df = self.file_to_df(motion_path)

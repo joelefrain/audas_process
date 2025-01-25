@@ -1,34 +1,46 @@
 import matplotlib.pyplot as plt
-import matplotlib
 import locale
-import os
-
 
 class PlotConfig:
-    """Clase para configurar parámetros globales de matplotlib."""
+    """Class to configure global matplotlib parameters."""
 
-    # Variables globales de matplotlib
+    # Global matplotlib variables
     font_family = "Arial"
     legend_loc = "upper right"
 
     @classmethod
     def setup_matplotlib(cls):
-        """Configura los parámetros globales de matplotlib."""
-        if os.name == "posix":
-            # En Linux, usa una fuente alternativa si 'Arial' no está disponible
-            cls.font_family = "DejaVu Sans"
+        """Configure global matplotlib parameters."""
 
+        # Set font family and legend location
         plt.rcParams["font.family"] = cls.font_family
         plt.rcParams["legend.loc"] = cls.legend_loc
+
+        # Enable locale settings for number formatting
         plt.rcParams["axes.formatter.use_locale"] = True
 
-        # Establece la configuración regional para usar coma como separador decimal
+        # Set locale to use comma as decimal separator
         try:
             locale.setlocale(locale.LC_ALL, "es_ES.UTF-8")
         except locale.Error:
             print(
-                "La configuración regional 'es_ES.UTF-8' no está disponible. Usando configuración predeterminada."
+                "The locale 'es_ES.UTF-8' is not available. Using default settings."
             )
 
-        # Establece un backend no interactivo para evitar que los gráficos se muestren
-        matplotlib.use("Agg")
+        # Automatically configure tight_layout for all figures
+        plt.rcParams["figure.constrained_layout.h_pad"] = 0
+        plt.rcParams["figure.constrained_layout.hspace"] = 0
+        plt.rcParams["figure.constrained_layout.w_pad"] = 0
+        plt.rcParams["figure.constrained_layout.wspace"] = 0
+        plt.rcParams["figure.constrained_layout.use"] = True
+
+        # Set matplotlib backend
+        plt.rcParams["backend"] = 'Agg'
+
+        # Configure date format
+        plt.rcParams["date.autoformatter.day"] = '%d-%m-%Y'
+        plt.rcParams["date.autoformatter.day"] = '%H-%M-%S'
+
+        # Set figure edge and face colors
+        plt.rcParams["figure.edgecolor"] = 'None'
+        plt.rcParams["figure.facecolor"] = 'None'

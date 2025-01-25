@@ -13,6 +13,7 @@ EARTH_PRES_COEFF_DEFAULT = 1
 # Components of motion
 MOTION_COMPONENTS = ["EW", "NS", "UD"]
 MOTION_COLORS = ["b", "g", "r"]
+METADATA_CODE = "MTD"
 
 # Output types for site response analysis
 OUTPUT_TYPES_SITE_RESPONSE = {

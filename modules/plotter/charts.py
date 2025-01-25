@@ -17,16 +17,6 @@ logger = get_logger(module)
 
 PlotConfig.setup_matplotlib()
 
-
-def tight_layout(pad=0, h_pad=0, w_pad=0, rect=None):
-    """
-    Adjust the subplot parameters to give specified padding.
-    """
-    logger.info("Adjusting subplot parameters")
-
-    plt.tight_layout(pad=pad, h_pad=h_pad, w_pad=w_pad, rect=rect)
-
-
 def save_picture(fname, type_output, ax, **kwargs):
     """
     Save the current matplotlib figure to a file.
@@ -43,7 +33,6 @@ def save_picture(fname, type_output, ax, **kwargs):
         Additional keyword arguments passed to plt.savefig.
     """
     logger.info(f"Saving figure to {fname}")
-    tight_layout()
     plt.savefig(fname, format=type_output, **kwargs)
 
 
@@ -122,7 +111,6 @@ def plot_time_series(
             ax.set_xlabel(title_x)
 
     os.makedirs(folder, exist_ok=True)
-    plt.tight_layout(pad=pad)  # Increase padding between subplots
     save_picture(os.path.join(folder, f"{name}.{type_output}"), type_output, ax)
 
 

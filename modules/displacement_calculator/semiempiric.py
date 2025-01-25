@@ -1,11 +1,12 @@
 import os
 import sys
-import numpy as np
-from dataclasses import dataclass, field
-from scipy.stats import norm
 
 # Add 'libs' path to sys.path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
+
+import numpy as np
+from dataclasses import dataclass, field
+from scipy.stats import norm
 
 from libs.utils.logger_config import get_logger
 from libs.utils.config_variables import (
@@ -207,8 +208,8 @@ class DisplacementCalculator:
                     f"Method '{self.method}' is not a valid Calculator class"
                 )
 
-            calculator = calculator_class(**kwargs)
-            self.displacement = calculator.calc_displacement()
+            self.calculator = calculator_class(**kwargs)
+            self.displacement = self.calculator.calc_displacement()
             logger.debug("Displacement calculation result: %f", self.displacement)
         except Exception as e:
             logger.error("Error during displacement calculation: %s", e)
@@ -216,16 +217,21 @@ class DisplacementCalculator:
 
     def get_result(self):
         """
-        Get the displacement result.
+        Get the displacement result and specific attributes.
 
         Returns
         -------
-        float
-            Displacement result.
+        dict
+            Dictionary containing specific attributes.
         """
-        logger.debug("Getting displacement result")
+        logger.debug("Getting displacement result and specific attributes")
         if self.displacement is None:
             logger.warning(
                 "Displacement result is not available. Execute the calculation first."
             )
-        return self.displacement
+        result = {
+            "displacement": self.displacement,
+            "spc_acc_degr": self.calculator.spc_acc_degr if hasattr(self, 'calculator') else None,
+            "struct_period": self.calculator.struct_period if hasattr(self, 'calculator') else None,
+        }
+        return result
